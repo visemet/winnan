@@ -10,6 +10,9 @@ The following modifications were made to the original sources:
       variables.
     - Fixed up test cases so they either pass or are skipped with Python 2 and earlier versions of
       Python 3.
+    - Fixed how MiscIOTest._check_warn_on_dealloc() always calls the built-in open() function. This
+      necessitated working around how pyio.IOBase.__del__() calling close() prevents a
+      ResourceWarning from ever being emitted.
 """
 
 # Tests of io are scattered over the test suite:
@@ -420,27 +423,25 @@ class IOTest(object):
         with self.open("non-existent", "r", opener=opener) as f:
             self.assertEqual(f.read(), "egg\n")
 
-    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
-    # winnan.open().
     @unittest.skipIf(sys.version_info < (3, 5), 'requires fix for issue27066')
     def test_bad_opener_negative_1(self):
         # Issue #27066.
-        def badopener(fname, flags):
+        def badopener(fname, flags, share_flags=None):
             return -1
-        with self.assertRaises(ValueError) as cm:
-            open('non-existent', 'r', opener=badopener)
-        self.assertEqual(str(cm.exception), 'opener returned -1')
+        with self.assertRaises((OSError, ValueError)) as cm:
+            self.open('non-existent', 'r', opener=badopener)
+        self.assertRegexpMatches(str(cm.exception),
+                                 r'^(opener returned -1|Negative file descriptor)$')
 
-    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
-    # winnan.open().
     @unittest.skipIf(sys.version_info < (3, 5), 'requires fix for issue27066')
     def test_bad_opener_other_negative(self):
         # Issue #27066.
-        def badopener(fname, flags):
+        def badopener(fname, flags, share_flags=None):
             return -2
-        with self.assertRaises(ValueError) as cm:
-            open('non-existent', 'r', opener=badopener)
-        self.assertEqual(str(cm.exception), 'opener returned -2')
+        with self.assertRaises((OSError, ValueError)) as cm:
+            self.open('non-existent', 'r', opener=badopener)
+        self.assertRegexpMatches(str(cm.exception),
+                                 r'^(opener returned -2|Negative file descriptor)$')
 
     def test_fileio_closefd(self):
         # Issue #4841
@@ -1000,11 +1001,9 @@ class MiscIOTest(object):
             self.assertRaises(ValueError, f.writelines, [])
             self.assertRaises(ValueError, next, f)
 
-    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
-    # winnan.open().
     @unittest.skipIf(sys.version_info < (3, 2), 'requires ResourceWarning support')
     def _check_warn_on_dealloc(self, *args, **kwargs):
-        f = open(*args, **kwargs)
+        f = self.open(*args, **kwargs)
         r = repr(f)
         with self.assertWarns(ResourceWarning) as cm:
             f = None
@@ -1013,11 +1012,14 @@ class MiscIOTest(object):
 
     def test_warn_on_dealloc(self):
         self._check_warn_on_dealloc(support.TESTFN, "wb", buffering=0)
-        self._check_warn_on_dealloc(support.TESTFN, "wb")
-        self._check_warn_on_dealloc(support.TESTFN, "w")
 
-    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
-    # winnan.open().
+        # pyio.IOBase.__del__() calls close() on the underlying file object before
+        # pyio.FileIO.__del__() is called. This causes pyio.FileIO.__del__() to not log a warning
+        # message when the file object is being destructed.
+        if self.io != pyio:
+            self._check_warn_on_dealloc(support.TESTFN, "wb")
+            self._check_warn_on_dealloc(support.TESTFN, "w")
+
     @unittest.skipIf(sys.version_info < (3, 2), 'requires ResourceWarning support')
     def _check_warn_on_dealloc_fd(self, *args, **kwargs):
         fds = []
@@ -1037,14 +1039,19 @@ class MiscIOTest(object):
         fds += r, w
         with warnings.catch_warnings(record=True) as recorded:
             warnings.filterwarnings('always', category=ResourceWarning)
-            open(r, *args, closefd=False, **kwargs)
+            self.open(r, *args, closefd=False, **kwargs)
             support.gc_collect()
         self.assertEqual(recorded, [])
 
     def test_warn_on_dealloc_fd(self):
         self._check_warn_on_dealloc_fd("rb", buffering=0)
-        self._check_warn_on_dealloc_fd("rb")
-        self._check_warn_on_dealloc_fd("r")
+
+        # pyio.IOBase.__del__() calls close() on the underlying file object before
+        # pyio.FileIO.__del__() is called. This causes pyio.FileIO.__del__() to not log a warning
+        # message when the file object is being destructed.
+        if self.io != pyio:
+            self._check_warn_on_dealloc_fd("rb")
+            self._check_warn_on_dealloc_fd("r")
 
 
     @unittest.skipIf(sys.version_info < (3, 2), 'requires fix for issue10180')
