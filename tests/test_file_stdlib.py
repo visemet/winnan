@@ -2,7 +2,13 @@
 
 Taken from Lib/test/test_file.py of Python 3.7.0.
 Copyright (c) 2001-2018 Python Software Foundation; See THIRD-PARTY-NOTICES.
+
+The following modifications were made to the original sources:
+    - Fixed up test cases so they either pass or are skipped with Python 2.
 """
+
+from __future__ import absolute_import
+from __future__ import print_function
 
 import sys
 import os
@@ -15,9 +21,12 @@ import _pyio as pyio
 
 from test.support import TESTFN
 from test import support
-from collections import UserList
+try:
+    from collections import UserList
+except ImportError:
+    from UserList import UserList
 
-class AutoFileTests:
+class AutoFileTests(object):
     # file tests for which a test file is automatically set up
 
     def setUp(self):
@@ -51,7 +60,7 @@ class AutoFileTests:
         a = array('b', b'x'*10)
         self.f = self.open(TESTFN, 'rb')
         n = self.f.readinto(a)
-        self.assertEqual(b'12', a.tobytes()[:n])
+        self.assertEqual(b'12', a.tostring()[:n])
 
     def testReadinto_text(self):
         # verify readinto refuses text files
@@ -81,7 +90,7 @@ class AutoFileTests:
 
     def testWritelinesNonString(self):
         # verify writelines with non-string object
-        class NonString:
+        class NonString(object):
             pass
 
         self.assertRaises(TypeError, self.f.writelines,
@@ -94,7 +103,7 @@ class AutoFileTests:
         self.assertFalse(f.closed)
 
         if hasattr(f, "readinto"):
-            self.assertRaises((OSError, TypeError), f.readinto, "")
+            self.assertRaises((OSError, TypeError, self.io.UnsupportedOperation), f.readinto, "")
         f.close()
         self.assertTrue(f.closed)
 
@@ -102,7 +111,7 @@ class AutoFileTests:
         methods = [('fileno', ()),
                    ('flush', ()),
                    ('isatty', ()),
-                   ('__next__', ()),
+                   ('next', ()) if sys.version_info[0] == 2 else ('__next__', ()),
                    ('read', ()),
                    ('write', (b"",)),
                    ('readline', ()),
@@ -133,16 +142,20 @@ class AutoFileTests:
             self.assertEqual(self.f.__exit__(*sys.exc_info()), None)
 
     def testReadWhenWriting(self):
-        self.assertRaises(OSError, self.f.read)
+        self.assertRaises((OSError, self.io.UnsupportedOperation), self.f.read)
 
 class CAutoFileTests(AutoFileTests, unittest.TestCase):
     open = io.open
+    io = io
 
 class PyAutoFileTests(AutoFileTests, unittest.TestCase):
     open = staticmethod(pyio.open)
+    io = pyio
 
 
-class OtherFileTests:
+class OtherFileTests(object):
+
+    VALID_MODE_U_STRINGS = set()
 
     def tearDown(self):
         support.unlink(TESTFN)
@@ -150,7 +163,7 @@ class OtherFileTests:
     def testModeStrings(self):
         # check invalid mode strings
         self.open(TESTFN, 'wb').close()
-        for mode in ("", "aU", "wU+", "U+", "+U", "rU+"):
+        for mode in {"", "aU", "wU+", "U+", "+U", "rU+"} - self.VALID_MODE_U_STRINGS:
             try:
                 f = self.open(TESTFN, mode)
             except ValueError:
@@ -279,7 +292,7 @@ class OtherFileTests:
         except ValueError:
             self.fail("readinto() after next() with supposedly empty "
                         "iteration-buffer failed anyway")
-        line = buf.tobytes()
+        line = buf.tostring()
         if line != testline:
             self.fail("readinto() after next() with empty buffer "
                         "failed. Got %r, expected %r" % (line, testline))
@@ -321,8 +334,18 @@ class OtherFileTests:
 class COtherFileTests(OtherFileTests, unittest.TestCase):
     open = io.open
 
+    # Prior to the changes from https://bugs.python.org/issue2091, the following mode "U" strings
+    # were still considered valid.
+    if sys.version_info < (3, 6):
+        VALID_MODE_U_STRINGS = {"U+", "+U", "rU+"}
+
 class PyOtherFileTests(OtherFileTests, unittest.TestCase):
     open = staticmethod(pyio.open)
+
+    # Prior to the changes from https://bugs.python.org/issue2091, the following mode "U" strings
+    # were still considered valid.
+    if sys.version_info < (3, 6):
+        VALID_MODE_U_STRINGS = {"U+", "+U", "rU+"}
 
 
 if __name__ == '__main__':

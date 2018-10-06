@@ -8,6 +8,8 @@ The following modifications were made to the original sources:
     - Added support for running tests with pytest by removing the load_tests() function. This
       necessitated explicitly setting the appropriate open() function and io module as class
       variables.
+    - Fixed up test cases so they either pass or are skipped with Python 2 and earlier versions of
+      Python 3.
 """
 
 # Tests of io are scattered over the test suite:
@@ -29,6 +31,10 @@ The following modifications were made to the original sources:
 # test both implementations. This file has lots of examples.
 ################################################################################
 
+from __future__ import absolute_import
+from __future__ import print_function
+from __future__ import unicode_literals
+
 import array
 import errno
 import os
@@ -38,31 +44,36 @@ import unittest
 import warnings
 import weakref
 from test import support
-from test.support import FakePath
 
 import codecs
 import io  # C implementation of io
 import _pyio as pyio # Python implementation of io
 
-try:
-    import ctypes
-except ImportError:
+if sys.version_info[0] == 2:
+    bytes = support.py3k_bytes
+
     def byteslike(*pos, **kw):
-        return array.array("b", bytes(*pos, **kw))
+        return memoryview(bytearray(*pos, **kw))
 else:
-    def byteslike(*pos, **kw):
-        """Create a bytes-like object having no string or sequence methods"""
-        data = bytes(*pos, **kw)
-        obj = EmptyStruct()
-        ctypes.resize(obj, len(data))
-        memoryview(obj).cast("B")[:] = data
-        return obj
-    class EmptyStruct(ctypes.Structure):
-        pass
+    try:
+        import ctypes
+    except ImportError:
+        def byteslike(*pos, **kw):
+            return array.array("b", bytes(*pos, **kw))
+    else:
+        def byteslike(*pos, **kw):
+            """Create a bytes-like object having no string or sequence methods"""
+            data = bytes(*pos, **kw)
+            obj = EmptyStruct()
+            ctypes.resize(obj, len(data))
+            memoryview(obj).cast("B")[:] = data
+            return obj
+        class EmptyStruct(ctypes.Structure):
+            pass
 
 def _default_chunk_size():
     """Get the default TextIOWrapper chunk size"""
-    with open(__file__, "r", encoding="latin-1") as f:
+    with io.open(__file__, "r", encoding="latin-1") as f:
         return f._CHUNK_SIZE
 
 
@@ -126,10 +137,11 @@ class IOTest(object):
             f.seek(6)
             self.assertEqual(f.read(), b"world\n")
             self.assertEqual(f.read(), b"")
-            f.seek(0)
-            data = byteslike(5)
-            self.assertEqual(f.readinto1(data), 5)
-            self.assertEqual(bytes(data), b"hello")
+            if sys.version_info >= (3, 5):
+                f.seek(0)
+                data = byteslike(5)
+                self.assertEqual(f.readinto1(data), 5)
+                self.assertEqual(bytes(data), b"hello")
 
     LARGE = 2**31
 
@@ -155,7 +167,7 @@ class IOTest(object):
 
     def test_invalid_operations(self):
         # Try writing on a file opened in read mode and vice-versa.
-        exc = self.io.UnsupportedOperation
+        exc = (IOError, ValueError, self.io.UnsupportedOperation)
         for mode in ("w", "wb"):
             with self.open(support.TESTFN, mode) as fp:
                 self.assertRaises(exc, fp.read)
@@ -178,12 +190,12 @@ class IOTest(object):
 
     def test_open_handles_NUL_chars(self):
         fn_with_NUL = 'foo\0bar'
-        self.assertRaises(ValueError, self.open, fn_with_NUL, 'w')
+        self.assertRaises((TypeError, ValueError), self.open, fn_with_NUL, 'w')
 
-        bytes_fn = bytes(fn_with_NUL, 'ascii')
+        bytes_fn = bytes_fn = fn_with_NUL.encode('ascii')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            self.assertRaises(ValueError, self.open, bytes_fn, 'w')
+            self.assertRaises((TypeError, ValueError), self.open, bytes_fn, 'w')
 
     def test_raw_file_io(self):
         with self.open(support.TESTFN, "wb", buffering=0) as f:
@@ -268,18 +280,19 @@ class IOTest(object):
             def __del__(self):
                 record.append(1)
                 try:
-                    f = super().__del__
+                    f = super(MyFileIO, self).__del__
                 except AttributeError:
                     pass
                 else:
                     f()
             def close(self):
                 record.append(2)
-                super().close()
+                super(MyFileIO, self).close()
             def flush(self):
                 record.append(3)
-                super().flush()
-        with support.check_warnings(('', ResourceWarning)):
+                super(MyFileIO, self).flush()
+        expected_warnings = (('', ResourceWarning),) if sys.version_info >= (3, 2) else ()
+        with support.check_warnings(*expected_warnings):
             f = MyFileIO(support.TESTFN, "wb")
             f.write(b"xxx")
             del f
@@ -323,7 +336,8 @@ class IOTest(object):
     def test_garbage_collection(self):
         # FileIO objects are collected, and collecting them flushes
         # all data to disk.
-        with support.check_warnings(('', ResourceWarning)):
+        expected_warnings = (('', ResourceWarning),) if sys.version_info >= (3, 2) else ()
+        with support.check_warnings(*expected_warnings):
             f = self.io.FileIO(support.TESTFN, "wb")
             f.write(b"abcxxx")
             f.f = f
@@ -396,6 +410,7 @@ class IOTest(object):
         f.close()
         self.assertRaises(ValueError, f.flush)
 
+    @unittest.skipIf(sys.version_info < (3, 3), 'requires opener support')
     def test_opener(self):
         with self.open(support.TESTFN, "w") as f:
             f.write("egg\n")
@@ -407,6 +422,7 @@ class IOTest(object):
 
     # TODO: This test case should say self.open() instead of open() so it can be swapped out with
     # winnan.open().
+    @unittest.skipIf(sys.version_info < (3, 5), 'requires fix for issue27066')
     def test_bad_opener_negative_1(self):
         # Issue #27066.
         def badopener(fname, flags):
@@ -417,6 +433,7 @@ class IOTest(object):
 
     # TODO: This test case should say self.open() instead of open() so it can be swapped out with
     # winnan.open().
+    @unittest.skipIf(sys.version_info < (3, 5), 'requires fix for issue27066')
     def test_bad_opener_other_negative(self):
         # Issue #27066.
         def badopener(fname, flags):
@@ -437,17 +454,28 @@ class IOTest(object):
             fileio.close()
             f2.readline()
 
+    @unittest.skipIf(sys.version_info < (3, 2), 'requires ResourceWarning support')
     def test_nonbuffered_textio(self):
-        with support.check_no_resource_warning(self):
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.filterwarnings('always', category=ResourceWarning)
             with self.assertRaises(ValueError):
                 self.open(support.TESTFN, 'w', buffering=0)
+            support.gc_collect()
+        self.assertEqual(recorded, [])
 
+    @unittest.skipIf(sys.version_info < (3, 2), 'requires ResourceWarning support')
     def test_invalid_newline(self):
-        with support.check_no_resource_warning(self):
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.filterwarnings('always', category=ResourceWarning)
             with self.assertRaises(ValueError):
                 self.open(support.TESTFN, 'w', newline='invalid')
+            support.gc_collect()
+        self.assertEqual(recorded, [])
 
+    @unittest.skipIf(sys.version_info < (3, 6), 'requires os.PathLike support')
     def test_fspath_support(self):
+        from test.support import FakePath
+
         def check_path_succeeds(path):
             with self.open(path, "w") as f:
                 f.write("egg\n")
@@ -498,6 +526,7 @@ class BufferedWriterTest(object):
         with self.open(support.TESTFN, "rb", buffering=0) as f:
             self.assertEqual(f.read(), b"abc")
 
+    @unittest.skipIf(sys.version_info < (3, 7), 'requires fix for issue32228')
     def test_truncate_after_write(self):
         # Ensure that truncate preserves the file position after
         # writes longer than the buffer size.
@@ -580,7 +609,7 @@ class StatefulIncrementalDecoder(codecs.IncrementalDecoder):
         output = ''
         for b in input:
             if self.i == 0: # variable-length, terminated with period
-                if b == ord('.'):
+                if b in ('.', ord('.')):
                     if self.buffer:
                         output += self.process_word()
                 else:
@@ -748,7 +777,7 @@ class TextIOWrapperTest(object):
         f.seek(0)
         for line in f:
             self.assertEqual(line, "\xff\n")
-            self.assertRaises(OSError, f.tell)
+            self.assertRaises((IOError, OSError), f.tell)
         self.assertEqual(f.tell(), p2)
         f.close()
 
@@ -765,7 +794,7 @@ class TextIOWrapperTest(object):
             f.write(line*2)
         with self.open(support.TESTFN, "r", encoding="utf-8") as f:
             s = f.read(prefix_size)
-            self.assertEqual(s, str(prefix, "ascii"))
+            self.assertEqual(s, prefix.decode("ascii"))
             self.assertEqual(f.tell(), prefix_size)
             self.assertEqual(f.readline(), u_suffix)
 
@@ -857,6 +886,7 @@ class TextIOWrapperTest(object):
             with self.open(filename, 'rb') as f:
                 self.assertEqual(f.read(), 'bbbzzz'.encode(charset))
 
+    @unittest.skipIf(sys.version_info < (3, 4, 4), 'requires fix for issue22982')
     def test_seek_append_bom(self):
         # Same test, but first seek to the start and then to the end
         filename = support.TESTFN
@@ -899,7 +929,8 @@ class MiscIOTest(object):
         self.assertEqual(f.mode, "wb")
         f.close()
 
-        with support.check_warnings(('', DeprecationWarning)):
+        expected_warnings = (('', DeprecationWarning),) if sys.version_info >= (3, 4) else ()
+        with support.check_warnings(*expected_warnings):
             f = self.open(support.TESTFN, "U")
         self.assertEqual(f.name,            support.TESTFN)
         self.assertEqual(f.buffer.name,     support.TESTFN)
@@ -951,7 +982,7 @@ class MiscIOTest(object):
             self.assertRaises(ValueError, f.read)
             if hasattr(f, "read1"):
                 self.assertRaises(ValueError, f.read1, 1024)
-                self.assertRaises(ValueError, f.read1)
+                self.assertRaises((TypeError, ValueError), f.read1)
             if hasattr(f, "readall"):
                 self.assertRaises(ValueError, f.readall)
             if hasattr(f, "readinto"):
@@ -971,6 +1002,7 @@ class MiscIOTest(object):
 
     # TODO: This test case should say self.open() instead of open() so it can be swapped out with
     # winnan.open().
+    @unittest.skipIf(sys.version_info < (3, 2), 'requires ResourceWarning support')
     def _check_warn_on_dealloc(self, *args, **kwargs):
         f = open(*args, **kwargs)
         r = repr(f)
@@ -986,6 +1018,7 @@ class MiscIOTest(object):
 
     # TODO: This test case should say self.open() instead of open() so it can be swapped out with
     # winnan.open().
+    @unittest.skipIf(sys.version_info < (3, 2), 'requires ResourceWarning support')
     def _check_warn_on_dealloc_fd(self, *args, **kwargs):
         fds = []
         def cleanup_fds():
@@ -1002,8 +1035,11 @@ class MiscIOTest(object):
         # When using closefd=False, there's no warning
         r, w = os.pipe()
         fds += r, w
-        with support.check_no_resource_warning(self):
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.filterwarnings('always', category=ResourceWarning)
             open(r, *args, closefd=False, **kwargs)
+            support.gc_collect()
+        self.assertEqual(recorded, [])
 
     def test_warn_on_dealloc_fd(self):
         self._check_warn_on_dealloc_fd("rb", buffering=0)
@@ -1011,6 +1047,7 @@ class MiscIOTest(object):
         self._check_warn_on_dealloc_fd("r")
 
 
+    @unittest.skipIf(sys.version_info < (3, 2), 'requires fix for issue10180')
     def test_pickling(self):
         # Pickling file objects is forbidden
         for kwargs in [
@@ -1086,12 +1123,14 @@ class MiscIOTest(object):
         self.assertTrue(wf.closed)
         self.assertTrue(rf.closed)
 
+    @unittest.skipIf(sys.version_info < (3, 3), "requires mode 'x' support")
     def test_create_fail(self):
         # 'x' mode fails if file is existing
         with self.open(support.TESTFN, 'w'):
             pass
         self.assertRaises(FileExistsError, self.open, support.TESTFN, 'x')
 
+    @unittest.skipIf(sys.version_info < (3, 3), "requires mode 'x' support")
     def test_create_writes(self):
         # 'x' mode opens for writing
         with self.open(support.TESTFN, 'xb') as f:
@@ -1099,6 +1138,7 @@ class MiscIOTest(object):
         with self.open(support.TESTFN, 'rb') as f:
             self.assertEqual(b"spam", f.read())
 
+    @unittest.skipIf(sys.version_info < (3, 3), "requires mode 'x' support")
     def test_open_allargs(self):
         # there used to be a buffer overflow in the parser for rawmode
         self.assertRaises(ValueError, self.open, support.TESTFN, 'rwax+')
