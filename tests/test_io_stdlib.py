@@ -5,6 +5,9 @@ Copyright (c) 2007-2018 Python Software Foundation; See THIRD-PARTY-NOTICES.
 
 The following modifications were made to the original sources:
     - Removed test cases that are unrelated to io.open().
+    - Added support for running tests with pytest by removing the load_tests() function. This
+      necessitated explicitly setting the appropriate open() function and io module as class
+      variables.
 """
 
 # Tests of io are scattered over the test suite:
@@ -63,7 +66,7 @@ def _default_chunk_size():
         return f._CHUNK_SIZE
 
 
-class IOTest(unittest.TestCase):
+class IOTest(object):
 
     def setUp(self):
         support.unlink(support.TESTFN)
@@ -152,7 +155,7 @@ class IOTest(unittest.TestCase):
 
     def test_invalid_operations(self):
         # Try writing on a file opened in read mode and vice-versa.
-        exc = self.UnsupportedOperation
+        exc = self.io.UnsupportedOperation
         for mode in ("w", "wb"):
             with self.open(support.TESTFN, mode) as fp:
                 self.assertRaises(exc, fp.read)
@@ -170,8 +173,8 @@ class IOTest(unittest.TestCase):
             self.assertRaises(exc, fp.write, "blah")
             self.assertRaises(exc, fp.writelines, ["blah\n"])
             # Non-zero seeking from current or end pos
-            self.assertRaises(exc, fp.seek, 1, self.SEEK_CUR)
-            self.assertRaises(exc, fp.seek, -1, self.SEEK_END)
+            self.assertRaises(exc, fp.seek, 1, self.io.SEEK_CUR)
+            self.assertRaises(exc, fp.seek, -1, self.io.SEEK_END)
 
     def test_open_handles_NUL_chars(self):
         fn_with_NUL = 'foo\0bar'
@@ -261,7 +264,7 @@ class IOTest(unittest.TestCase):
 
     def test_destructor(self):
         record = []
-        class MyFileIO(self.FileIO):
+        class MyFileIO(self.io.FileIO):
             def __del__(self):
                 record.append(1)
                 try:
@@ -321,7 +324,7 @@ class IOTest(unittest.TestCase):
         # FileIO objects are collected, and collecting them flushes
         # all data to disk.
         with support.check_warnings(('', ResourceWarning)):
-            f = self.FileIO(support.TESTFN, "wb")
+            f = self.io.FileIO(support.TESTFN, "wb")
             f.write(b"abcxxx")
             f.f = f
             wr = weakref.ref(f)
@@ -426,7 +429,7 @@ class IOTest(unittest.TestCase):
         # Issue #4841
         with self.open(__file__, 'rb') as f1, \
              self.open(__file__, 'rb') as f2:
-            fileio = self.FileIO(f1.fileno(), closefd=False)
+            fileio = self.io.FileIO(f1.fileno(), closefd=False)
             # .__init__() must not close f1
             fileio.__init__(f2.fileno(), closefd=False)
             f1.readline()
@@ -472,15 +475,16 @@ class IOTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'read/write/append mode'):
             self.open(FakePath(support.TESTFN), 'rwxa')
 
+class CIOTest(IOTest, unittest.TestCase):
+    open = io.open
+    io = io
 
-class CIOTest(IOTest):
-    pass
-
-class PyIOTest(IOTest):
-    pass
+class PyIOTest(IOTest, unittest.TestCase):
+    open = staticmethod(pyio.open)
+    io = pyio
 
 
-class BufferedWriterTest(unittest.TestCase):
+class BufferedWriterTest(object):
     write_mode = "wb"
 
     def test_truncate(self):
@@ -511,6 +515,14 @@ class BufferedWriterTest(unittest.TestCase):
                 # read operation makes sure that pos != raw_pos
                 f.truncate()
                 self.assertEqual(f.tell(), buffer_size + 2)
+
+class CBufferedWriterTest(BufferedWriterTest, unittest.TestCase):
+    open = io.open
+    tp = io.BufferedWriter
+
+class PyBufferedWriterTest(BufferedWriterTest, unittest.TestCase):
+    open = staticmethod(pyio.open)
+    tp = pyio.BufferedWriter
 
 
 # To fully exercise seek/tell, the StatefulIncrementalDecoder has these
@@ -657,7 +669,7 @@ class StatefulIncrementalDecoderTest(unittest.TestCase):
         self.assertEqual(d.decode(b'oiabcd'), '')
         self.assertEqual(d.decode(b'', 1), 'abcd.')
 
-class TextIOWrapperTest(unittest.TestCase):
+class TextIOWrapperTest(object):
 
     def setUp(self):
         self.testdata = b"AAA\r\nBBB\rCCC\r\nDDD\nEEE\r\n"
@@ -853,7 +865,7 @@ class TextIOWrapperTest(unittest.TestCase):
                 f.write('aaa')
             with self.open(filename, 'a', encoding=charset) as f:
                 f.seek(0)
-                f.seek(0, self.SEEK_END)
+                f.seek(0, self.io.SEEK_END)
                 f.write('xxx')
             with self.open(filename, 'rb') as f:
                 self.assertEqual(f.read(), 'aaaxxx'.encode(charset))
@@ -865,17 +877,19 @@ class TextIOWrapperTest(unittest.TestCase):
             self.assertEqual(f.errors, "replace")
 
 
-class CTextIOWrapperTest(TextIOWrapperTest):
+class CTextIOWrapperTest(TextIOWrapperTest, unittest.TestCase):
+    open = io.open
     io = io
 
 
-class PyTextIOWrapperTest(TextIOWrapperTest):
+class PyTextIOWrapperTest(TextIOWrapperTest, unittest.TestCase):
+    open = staticmethod(pyio.open)
     io = pyio
 
 
 # XXX Tests for open()
 
-class MiscIOTest(unittest.TestCase):
+class MiscIOTest(object):
 
     def tearDown(self):
         support.unlink(support.TESTFN)
@@ -1046,7 +1060,7 @@ class MiscIOTest(unittest.TestCase):
                         wf.write(msg)
                         i += 1
 
-                except self.BlockingIOError as e:
+                except self.io.BlockingIOError as e:
                     self.assertEqual(e.args[0], errno.EAGAIN)
                     self.assertEqual(e.args[2], e.characters_written)
                     sent[-1] = sent[-1][:e.characters_written]
@@ -1059,7 +1073,7 @@ class MiscIOTest(unittest.TestCase):
                 try:
                     wf.flush()
                     break
-                except self.BlockingIOError as e:
+                except self.io.BlockingIOError as e:
                     self.assertEqual(e.args[0], errno.EAGAIN)
                     self.assertEqual(e.args[2], e.characters_written)
                     self.assertEqual(e.characters_written, 0)
@@ -1089,39 +1103,14 @@ class MiscIOTest(unittest.TestCase):
         # there used to be a buffer overflow in the parser for rawmode
         self.assertRaises(ValueError, self.open, support.TESTFN, 'rwax+')
 
-
-class CMiscIOTest(MiscIOTest):
+class CMiscIOTest(MiscIOTest, unittest.TestCase):
+    open = io.open
     io = io
 
-
-class PyMiscIOTest(MiscIOTest):
+class PyMiscIOTest(MiscIOTest, unittest.TestCase):
+    open = staticmethod(pyio.open)
     io = pyio
 
-
-def load_tests(*args):
-    tests = (CIOTest, PyIOTest,
-             StatefulIncrementalDecoderTest,
-             CTextIOWrapperTest, PyTextIOWrapperTest,
-             CMiscIOTest, PyMiscIOTest,
-             )
-
-    # Put the namespaces of the IO module we are testing in the __dict__ of each test.
-    all_members = io.__all__ + ["IncrementalNewlineDecoder"]
-    c_io_ns = {name : getattr(io, name) for name in all_members}
-    py_io_ns = {name : getattr(pyio, name) for name in all_members}
-    globs = globals()
-    # Avoid turning open into a bound method.
-    py_io_ns["open"] = pyio.OpenWrapper
-    for test in tests:
-        if test.__name__.startswith("C"):
-            for name, obj in c_io_ns.items():
-                setattr(test, name, obj)
-        elif test.__name__.startswith("Py"):
-            for name, obj in py_io_ns.items():
-                setattr(test, name, obj)
-
-    suite = unittest.TestSuite([unittest.makeSuite(test) for test in tests])
-    return suite
 
 if __name__ == "__main__":
     unittest.main()
