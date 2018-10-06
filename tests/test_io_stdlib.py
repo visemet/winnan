@@ -402,6 +402,8 @@ class IOTest(unittest.TestCase):
         with self.open("non-existent", "r", opener=opener) as f:
             self.assertEqual(f.read(), "egg\n")
 
+    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
+    # winnan.open().
     def test_bad_opener_negative_1(self):
         # Issue #27066.
         def badopener(fname, flags):
@@ -410,6 +412,8 @@ class IOTest(unittest.TestCase):
             open('non-existent', 'r', opener=badopener)
         self.assertEqual(str(cm.exception), 'opener returned -1')
 
+    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
+    # winnan.open().
     def test_bad_opener_other_negative(self):
         # Issue #27066.
         def badopener(fname, flags):
@@ -951,6 +955,8 @@ class MiscIOTest(unittest.TestCase):
             self.assertRaises(ValueError, f.writelines, [])
             self.assertRaises(ValueError, next, f)
 
+    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
+    # winnan.open().
     def _check_warn_on_dealloc(self, *args, **kwargs):
         f = open(*args, **kwargs)
         r = repr(f)
@@ -964,6 +970,8 @@ class MiscIOTest(unittest.TestCase):
         self._check_warn_on_dealloc(support.TESTFN, "wb")
         self._check_warn_on_dealloc(support.TESTFN, "w")
 
+    # TODO: This test case should say self.open() instead of open() so it can be swapped out with
+    # winnan.open().
     def _check_warn_on_dealloc_fd(self, *args, **kwargs):
         fds = []
         def cleanup_fds():
