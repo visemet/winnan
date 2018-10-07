@@ -1,0 +1,3 @@
+.eggs/
+tests/test_file_stdlib.py
+tests/test_io_stdlib.py
