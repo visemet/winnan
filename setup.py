@@ -38,6 +38,23 @@ class FormatCode(setuptools.Command):
             raise distutils.errors.DistutilsError(msg)  # pylint: disable=no-member
 
 
+class LintCode(setuptools.Command):
+    """Command to run pylint on all Python code."""
+
+    user_options = []
+
+    def initialize_options(self):  # pylint: disable=missing-docstring
+        pass
+
+    def finalize_options(self):  # pylint: disable=missing-docstring
+        pass
+
+    def run(self):  # pylint: disable=missing-docstring,no-self-use
+        import pylint.lint  # pylint: disable=import-error
+
+        pylint.lint.Run(["setup.py", "tests/", "winnan/"], exit=False)
+
+
 SETUP_REQUIRES = []
 
 if {"ptr", "pytest", "test"}.intersection(sys.argv):
@@ -46,7 +63,10 @@ if {"ptr", "pytest", "test"}.intersection(sys.argv):
 if {"format"}.intersection(sys.argv):
     SETUP_REQUIRES.append("yapf == 0.25.0")
 
+if {"lint"}.intersection(sys.argv):
+    SETUP_REQUIRES.append("pylint == 1.9.3")
+
 setuptools.setup(
     setup_requires=SETUP_REQUIRES,
-    cmdclass=dict(format=FormatCode),
+    cmdclass=dict(format=FormatCode, lint=LintCode),
 )

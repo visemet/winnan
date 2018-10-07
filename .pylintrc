@@ -1,0 +1,2 @@
+[MASTER]
+ignore=test_file_stdlib.py,test_io_stdlib.py
