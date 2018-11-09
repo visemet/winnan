@@ -18,9 +18,11 @@ if sys.platform in ("win32", "cygwin"):
     O_BINARY = os.O_BINARY  # pylint: disable=no-member
     O_NOINHERIT = O_CLOEXEC = os.O_NOINHERIT  # pylint: disable=no-member
 else:
+    import winnan._cython.fcntl as winnan_fcntl
+
     FILE_SHARE_VALID_FLAGS = 0
     O_BINARY = 0
-    O_NOINHERIT = O_CLOEXEC = getattr(os, "O_CLOEXEC", 0)  # os.O_CLOEXEC was added in Python 3.3.
+    O_NOINHERIT = O_CLOEXEC = winnan_fcntl.O_CLOEXEC
 
 
 def mode_to_flags(mode):  # pylint: disable=too-many-branches
@@ -32,6 +34,7 @@ def mode_to_flags(mode):  # pylint: disable=too-many-branches
     The following modifications were made to the original sources:
         - Changed to permit modes "t" and "U".
         - Added error checking for mode "U" that isn't present in Python 2.
+        - Changed to use O_CLOEXEC constant as defined by the winnan_fcntl Cython module.
     """
     if not isinstance(mode, basestring):
         raise TypeError("invalid mode: %s" % (mode, ))

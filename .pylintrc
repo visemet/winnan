@@ -1,2 +1,3 @@
 [MASTER]
+extension-pkg-whitelist=winnan._cython.fcntl
 ignore=test_file_stdlib.py,test_io_stdlib.py

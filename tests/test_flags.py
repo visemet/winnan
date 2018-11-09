@@ -36,7 +36,6 @@ class TestConstants(unittest.TestCase):
         else:
             self.assertEqual(0, winnan.flags.O_BINARY)
 
-    @unittest.skipIf(sys.version_info < (3, 3), "requires os.O_CLOEXEC support")
     def test_noinherit_and_cloexec_are_defined(self):  # pylint: disable=invalid-name,missing-docstring
         self.assertNotEqual(0, winnan.flags.O_NOINHERIT)
         self.assertNotEqual(0, winnan.flags.O_CLOEXEC)
@@ -48,7 +47,6 @@ class TestConstants(unittest.TestCase):
     # The following test case was adapted from the test case added in
     # https://hg.python.org/cpython/rev/f1c544245eab.
     @unittest.skipUnless(fcntl, "requires fcntl module")
-    @unittest.skipIf(sys.version_info < (3, 3), "requires os.O_CLOEXEC support")
     def test_cloexec_sets_fd_cloexec_on_open(self):  # pylint: disable=invalid-name,missing-docstring
         with open(test.support.TESTFN, "w+"):
             self.addCleanup(os.remove, test.support.TESTFN)

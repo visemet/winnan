@@ -56,6 +56,13 @@ class LintCode(setuptools.Command):
 
 
 SETUP_REQUIRES = []
+CYTHON_EXTENSION_MODULES = []
+
+if sys.platform not in ("win32", "cygwin"):
+    SETUP_REQUIRES.append("Cython >= 0.29.1")
+    CYTHON_EXTENSION_MODULES += [
+        setuptools.Extension("winnan._cython.fcntl", ["winnan/_cython/fcntl.pyx"]),
+    ]
 
 if {"ptr", "pytest", "test"}.intersection(sys.argv):
     SETUP_REQUIRES.append("pytest-runner >= 4.2")
@@ -67,6 +74,7 @@ if {"lint"}.intersection(sys.argv):
     SETUP_REQUIRES.append("pylint == 1.9.3")
 
 setuptools.setup(
+    ext_modules=CYTHON_EXTENSION_MODULES,
     setup_requires=SETUP_REQUIRES,
     cmdclass=dict(format=FormatCode, lint=LintCode),
 )
