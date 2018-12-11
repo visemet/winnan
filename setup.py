@@ -3,6 +3,7 @@
 
 import distutils.errors  # pylint: disable=import-error,no-name-in-module
 import distutils.log  # pylint: disable=import-error,no-name-in-module
+import os.path
 import sys
 
 import setuptools
@@ -57,6 +58,9 @@ class LintCode(setuptools.Command):
 
 SETUP_REQUIRES = []
 CYTHON_EXTENSION_MODULES = []
+SETUP_DIR = os.path.abspath(os.path.dirname(__file__))
+
+SETUP_REQUIRES.append("setuptools_scm >= 3.1.0")
 
 if sys.platform not in ("win32", "cygwin"):
     SETUP_REQUIRES.append("Cython >= 0.29.1")
@@ -76,5 +80,9 @@ if {"lint"}.intersection(sys.argv):
 setuptools.setup(
     ext_modules=CYTHON_EXTENSION_MODULES,
     setup_requires=SETUP_REQUIRES,
+    use_scm_version=dict(
+        root=SETUP_DIR,
+        write_to=os.path.join(SETUP_DIR, "winnan/_version.py"),
+    ),
     cmdclass=dict(format=FormatCode, lint=LintCode),
 )
