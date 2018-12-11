@@ -5,6 +5,7 @@ Copyright (c) 2001-2018 Python Software Foundation; See THIRD-PARTY-NOTICES.
 
 The following modifications were made to the original sources:
     - Fixed up test cases so they either pass or are skipped with Python 2.
+    - Added winnan versions of the AutoFileTests and OtherFileTests test cases.
 """
 
 from __future__ import absolute_import
@@ -25,6 +26,8 @@ try:
     from collections import UserList
 except ImportError:
     from UserList import UserList
+
+from tests.context import winnan
 
 class AutoFileTests(object):
     # file tests for which a test file is automatically set up
@@ -152,6 +155,9 @@ class PyAutoFileTests(AutoFileTests, unittest.TestCase):
     open = staticmethod(pyio.open)
     io = pyio
 
+class WinnanAutoFileTests(AutoFileTests, unittest.TestCase):
+    open = staticmethod(winnan.open)
+    io = io
 
 class OtherFileTests(object):
 
@@ -347,6 +353,8 @@ class PyOtherFileTests(OtherFileTests, unittest.TestCase):
     if sys.version_info < (3, 6):
         VALID_MODE_U_STRINGS = {"U+", "+U", "rU+"}
 
+class WinnanOtherFileTests(OtherFileTests, unittest.TestCase):
+    open = staticmethod(winnan.open)
 
 if __name__ == '__main__':
     unittest.main()

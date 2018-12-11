@@ -13,6 +13,9 @@ The following modifications were made to the original sources:
     - Fixed how MiscIOTest._check_warn_on_dealloc() always calls the built-in open() function. This
       necessitated working around how pyio.IOBase.__del__() calling close() prevents a
       ResourceWarning from ever being emitted.
+    - Added winnan versions of the BufferedWriterTest, IOTest, MiscIOTest, and TextIOWrapperTest
+      test cases.
+    - Added unused 'mode' and 'share_flags' keyword arguments to the opener() functions.
 """
 
 # Tests of io are scattered over the test suite:
@@ -51,6 +54,9 @@ from test import support
 import codecs
 import io  # C implementation of io
 import _pyio as pyio # Python implementation of io
+
+from tests.context import winnan
+import tests.mark
 
 if sys.version_info[0] == 2:
     bytes = support.py3k_bytes
@@ -413,35 +419,35 @@ class IOTest(object):
         f.close()
         self.assertRaises(ValueError, f.flush)
 
-    @unittest.skipIf(sys.version_info < (3, 3), 'requires opener support')
+    @tests.mark.skip_unless_winnan_or(sys.version_info >= (3, 3), 'requires opener support')
     def test_opener(self):
         with self.open(support.TESTFN, "w") as f:
             f.write("egg\n")
         fd = os.open(support.TESTFN, os.O_RDONLY)
-        def opener(path, flags):
+        def opener(path, flags, mode=None, share_flags=None):
             return fd
         with self.open("non-existent", "r", opener=opener) as f:
             self.assertEqual(f.read(), "egg\n")
 
-    @unittest.skipIf(sys.version_info < (3, 5), 'requires fix for issue27066')
+    @tests.mark.skip_unless_winnan_or(sys.version_info >= (3, 5), 'requires fix for issue27066')
     def test_bad_opener_negative_1(self):
         # Issue #27066.
-        def badopener(fname, flags, share_flags=None):
+        def badopener(fname, flags, mode=None, share_flags=None):
             return -1
         with self.assertRaises((OSError, ValueError)) as cm:
             self.open('non-existent', 'r', opener=badopener)
         self.assertRegexpMatches(str(cm.exception),
-                                 r'^(opener returned -1|Negative file descriptor)$')
+                                 r'^(opener returned -1|[Nn]egative file descriptor)$')
 
-    @unittest.skipIf(sys.version_info < (3, 5), 'requires fix for issue27066')
+    @tests.mark.skip_unless_winnan_or(sys.version_info >= (3, 5), 'requires fix for issue27066')
     def test_bad_opener_other_negative(self):
         # Issue #27066.
-        def badopener(fname, flags, share_flags=None):
+        def badopener(fname, flags, mode=None, share_flags=None):
             return -2
         with self.assertRaises((OSError, ValueError)) as cm:
             self.open('non-existent', 'r', opener=badopener)
         self.assertRegexpMatches(str(cm.exception),
-                                 r'^(opener returned -2|Negative file descriptor)$')
+                                 r'^(opener returned -2|[Nn]egative file descriptor)$')
 
     def test_fileio_closefd(self):
         # Issue #4841
@@ -512,6 +518,10 @@ class PyIOTest(IOTest, unittest.TestCase):
     open = staticmethod(pyio.open)
     io = pyio
 
+class WinnanIOTest(IOTest, unittest.TestCase):
+    open = staticmethod(winnan.open)
+    io = io
+
 
 class BufferedWriterTest(object):
     write_mode = "wb"
@@ -553,6 +563,10 @@ class CBufferedWriterTest(BufferedWriterTest, unittest.TestCase):
 class PyBufferedWriterTest(BufferedWriterTest, unittest.TestCase):
     open = staticmethod(pyio.open)
     tp = pyio.BufferedWriter
+
+class WinnanBufferedWriterTest(BufferedWriterTest, unittest.TestCase):
+    open = staticmethod(winnan.open)
+    tp = io.BufferedWriter
 
 
 # To fully exercise seek/tell, the StatefulIncrementalDecoder has these
@@ -918,6 +932,11 @@ class PyTextIOWrapperTest(TextIOWrapperTest, unittest.TestCase):
     io = pyio
 
 
+class WinnanTextIOWrapperTest(TextIOWrapperTest, unittest.TestCase):
+    open = staticmethod(winnan.open)
+    io = io
+
+
 # XXX Tests for open()
 
 class MiscIOTest(object):
@@ -1158,6 +1177,9 @@ class PyMiscIOTest(MiscIOTest, unittest.TestCase):
     open = staticmethod(pyio.open)
     io = pyio
 
+class WinnanMiscIOTest(MiscIOTest, unittest.TestCase):
+    open = staticmethod(winnan.open)
+    io = io
 
 if __name__ == "__main__":
     unittest.main()
