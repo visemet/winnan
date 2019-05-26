@@ -1,0 +1,95 @@
+cache: pip
+language: python
+
+branches:
+  only:
+  - master
+
+script: python -m tox
+
+^variables:
+- &linux
+  os: linux
+  install: &pip_install
+    python -m pip install --upgrade --force-reinstall pip setuptools tox
+
+- &macos
+  os: osx
+  language: minimal
+  addons:
+    homebrew:
+      update: true
+      packages:
+      - pyenv
+      - pyenv-virtualenv
+  before_install: |
+    eval "$(pyenv init -)"
+    pyenv install $PYENV_VERSION
+    pyenv rehash
+    pyenv virtualenv $PYENV_VERSION venv
+    pyenv activate venv
+  install: *pip_install
+
+- &windows
+  os: windows
+  language: minimal
+  install: *pip_install
+
+matrix:
+  include:
+  - <<: *linux
+    python: 2.7
+    env: TOXENV=py27
+    # Running tox directly with Python 2.7 leads to an import error in the make_lexicon() function
+    # in Cython/Compiler/Lexicon.py. Attempting to use a version of Cython earlier than 0.29.7 to
+    # work around this issue leads to a segmentation fault. Explicitly building the C extensions
+    # first means that tox will copy over the generated .c files and therefore won't attempt to
+    # cythonize() later on inside setuptools.
+    before_script: &build_c_extensions
+      python setup.py build_ext
+
+  - <<: *linux
+    python: 3.5
+    env: TOXENV=py35
+
+  - <<: *linux
+    python: 3.6
+    env: TOXENV=py36
+
+  - <<: *linux
+    python: 3.7
+    env: TOXENV=py37
+    dist: xenial  # dist=xenial is required for Python >= 3.7.
+
+  - <<: *macos
+    env: TOXENV=py27 PYENV_VERSION=2.7.16
+    before_script: *build_c_extensions
+
+  - <<: *macos
+    env: TOXENV=py35 PYENV_VERSION=3.5.4
+
+  - <<: *macos
+    env: TOXENV=py36 PYENV_VERSION=3.6.8
+
+  - <<: *macos
+    env: TOXENV=py37 PYENV_VERSION=3.7.3
+
+  # XXX: Windows instances in Travis CI just spin at the third step of "Booting virtual machine" and
+  # eventually time out trying to run. Maybe we will be able to use Windows on Travis CI one day,
+  # but for now we will just use AppVeyor like everyone else.
+  #
+  # - <<: *windows
+  #   before_install: choco install python2 --version 2.7.16
+  #   env: TOXENV=py27 PATH=/c/Python27:/c/Python27/Scripts:$PATH
+  #
+  # - <<: *windows
+  #   before_install: choco install python3 --version 3.5.4
+  #   env: TOXENV=py35 PATH=/c/Python35:/c/Python35/Scripts:$PATH
+  #
+  # - <<: *windows
+  #   before_install: choco install python3 --version 3.6.8
+  #   env: TOXENV=py36 PATH=/c/Python36:/c/Python36/Scripts:$PATH
+  #
+  # - <<: *windows
+  #   before_install: choco install python3 --version 3.7.3
+  #   env: TOXENV=py37 PATH=/c/Python37:/c/Python37/Scripts:$PATH

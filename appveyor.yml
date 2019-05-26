@@ -1,0 +1,18 @@
+branches:
+  only:
+  - master
+
+environment:
+  matrix:
+  - TOXENV: py27
+  - TOXENV: py35
+  - TOXENV: py36
+  - TOXENV: py37
+
+build: off
+
+install:
+- python -m pip install --upgrade --force-reinstall pip setuptools tox
+
+test_script:
+- python -m tox

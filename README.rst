@@ -1,3 +1,25 @@
+.. image:: https://travis-ci.com/visemet/winnan.svg?branch=master
+    :target: https://travis-ci.com/visemet/winnan
+    :alt: Travis CI build status
+
+.. image:: https://ci.appveyor.com/api/projects/status/f58mmgibijt4annn/branch/master?svg=true
+    :target: https://ci.appveyor.com/project/visemet/winnan/branch/master
+    :alt: AppVeyor build status
+
+.. image:: https://img.shields.io/pypi/v/winnan.svg?label=pypi
+    :target: https://pypi.org/project/winnan
+    :alt: Latest version
+
+.. image:: https://img.shields.io/pypi/pyversions/winnan.svg
+    :target: https://pypi.org/project/winnan
+    :alt: Supported Python versions
+
+.. image:: https://img.shields.io/pypi/l/winnan.svg
+    :target: LICENSE
+    :alt: License
+
+----
+
 winnan
 ======
 

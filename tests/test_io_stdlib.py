@@ -479,7 +479,7 @@ class IOTest(object):
             support.gc_collect()
         self.assertEqual(recorded, [])
 
-    @unittest.skipIf(sys.version_info < (3, 6), 'requires os.PathLike support')
+    @unittest.skipIf(sys.version_info < (3, 6, 5), 'requires os.PathLike support')
     def test_fspath_support(self):
         from test.support import FakePath
 

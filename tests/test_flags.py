@@ -106,6 +106,6 @@ class TestModeToFlags(unittest.TestCase):
                 if mode in valid_modes:
                     continue
 
-                with pytest.raises(ValueError,
-                                   message="Expected mode '%s' to raise an exception" % (mode)):
+                with pytest.raises(ValueError):
                     winnan.flags.mode_to_flags(mode)
+                    pytest.fail("Expected mode '%s' to raise an exception" % (mode))
